@@ -99,7 +99,7 @@ class DoctorsScreen(QWidget):
         if dialog.exec_() == QDialog.Accepted:
             doctor_data = dialog.get_doctor_data()
 
-            # Generate a unique doctor ID (you can use a different approach if needed)
+            # Generate a unique doctor ID 
             doctor_id = str(self.doctors_table.rowCount() + 1)
 
             # Add the new doctor to the table

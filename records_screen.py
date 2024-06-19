@@ -76,7 +76,7 @@ class RecordsScreen(QWidget):
         if dialog.exec_() == QDialog.Accepted:
             record_data = dialog.get_record_data()
 
-            # Generate a unique record ID (you can use a different approach if needed)
+            # Generate a unique record ID 
             record_id = str(self.records_table.rowCount() + 1)
 
             # Add the new record to the table

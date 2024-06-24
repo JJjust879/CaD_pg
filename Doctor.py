@@ -428,11 +428,20 @@ class AddPrescriptionDialog(QDialog):
                     QMessageBox.warning(self, "Error", "Doctor not found.")
                     return
 
+                # Check if patient exists
+                cursor.execute("SELECT Patient_ID FROM Patient WHERE Patient_Name = ?", (patient_name,))
+                patient_result = cursor.fetchone()
+                if not patient_result:
+                    QMessageBox.warning(self, "Error", "Patient not found.")
+                    return
+
+                patient_id = patient_result['Patient_ID']
+
                 cursor.execute("""
                     INSERT INTO Records (Clinic_ID, Patient_ID, Patient_Name, Doctor_ID, Doctor_Name, Date, Time, Description, Prescription)
                     VALUES (
                         ?,
-                        (SELECT Patient_ID FROM Patient WHERE Patient_Name = ?),
+                        ?,
                         ?,
                         ?,
                         (SELECT Doctor_Name FROM Doctor WHERE Doctor_ID = ?),
@@ -441,7 +450,7 @@ class AddPrescriptionDialog(QDialog):
                         ?,
                         ?
                     )
-                """, (clinic_id, patient_name, patient_name, doctor_id, doctor_id,date, time, description, prescription))
+                """, (clinic_id, patient_id, patient_name, doctor_id, doctor_id, date, time, description, prescription))
                 connection.commit()
                 QMessageBox.information(self, "Prescription Added", "Prescription added successfully.")
                 self.accept()
@@ -452,6 +461,7 @@ class AddPrescriptionDialog(QDialog):
                 connection.close()
         else:
             print("Error: Could not establish database connection")
+
 
     def get_clinic_id(self, cursor, clinic_name):
         try:

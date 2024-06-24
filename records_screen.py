@@ -1,109 +1,223 @@
-from PyQt5.QtWidgets import QWidget, QLabel, QLineEdit, QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QHBoxLayout, QDateEdit, QTimeEdit, QTextEdit, QDialog, QFormLayout
-from PyQt5.QtCore import QDate, QTime
+from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QLabel, QLineEdit, 
+                             QTextEdit, QPushButton, QMessageBox, QListWidgetItem,
+                             QDateEdit, QTimeEdit, QSpinBox)
+from PyQt5.QtCore import Qt, QDate, QTime
+from PyQt5.QtGui import QIcon
+from base_screen import BaseScreen, CustomListItem
+from view_dialog import ViewDialog
+import sqlite3
 
-class RecordDialog(QDialog):
-    def __init__(self, parent=None, record_data=None):
+class RecordViewDialog(ViewDialog):
+    def __init__(self, record_id, clinic_id, parent=None):
+        super().__init__("Record Details", parent)
+        self.record_id = record_id
+        self.clinic_id = clinic_id  # Store clinic_id
+        self.load_record()
+
+    def load_record(self):
+        conn = sqlite3.connect('CallADoctor.db')
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM Records WHERE Record_ID = ? AND Clinic_ID = ?", (self.record_id, self.clinic_id))
+        record = cursor.fetchone()
+        conn.close()
+
+        if record:
+            self.add_field("Patient Name", record[2])
+            self.add_field("Doctor Name", record[4])
+            self.add_field("Date", record[5])
+            self.add_field("Time", record[6])
+            self.add_field("Description", record[7])
+            self.add_field("Prescription", record[8])
+        else:
+            QMessageBox.warning(self, "Error", "Record not found or you do not have permission to view this record.")
+            self.close()
+
+
+class RecordDetailDialog(QDialog):
+    def __init__(self, record_id=None, clinic_id=None, parent=None, editable=False):
         super().__init__(parent)
-        self.setWindowTitle("Record Information")
-        self.layout = QFormLayout(self)
+        self.record_id = record_id
+        self.clinic_id = clinic_id  # Store clinic_id
+        self.setWindowTitle("Record Details")
+        self.layout = QVBoxLayout(self)
 
-        if record_data is None:
-            record_data = {}
+        self.patient_name = QLineEdit()
+        self.doctor_name = QLineEdit()
 
-        self.date_input = QDateEdit(QDate.fromString(record_data.get("date", ""), "yyyy-MM-dd"))
-        self.doctor_id_input = QLineEdit(record_data.get("doctor_id", ""))
-        self.time_input = QTimeEdit(QTime.fromString(record_data.get("time", ""), "HH:mm"))
-        self.description_input = QTextEdit(record_data.get("description", ""))
-        self.prescription_input = QTextEdit(record_data.get("prescription", ""))
+        self.date = QDateEdit()
+        self.date.setCalendarPopup(True)
+        self.date.setDateRange(QDate(1900, 1, 1), QDate.currentDate()) 
+        
+        self.time = QTimeEdit()
+        self.time.setDisplayFormat("HH:mm")
 
-        self.layout.addRow("Date:", self.date_input)
-        self.layout.addRow("Doctor ID:", self.doctor_id_input)
-        self.layout.addRow("Time:", self.time_input)
-        self.layout.addRow("Description:", self.description_input)
-        self.layout.addRow("Prescription:", self.prescription_input)
+        self.description = QTextEdit()
+        self.prescription = QTextEdit()
 
-        self.submit_button = QPushButton("Submit")
-        self.submit_button.clicked.connect(self.accept)
-        self.layout.addRow(self.submit_button)
+        self.layout.addWidget(QLabel("Patient Name:"))
+        self.layout.addWidget(self.patient_name)
+        self.layout.addWidget(QLabel("Doctor Name:"))
+        self.layout.addWidget(self.doctor_name)
+        self.layout.addWidget(QLabel("Date:"))
+        self.layout.addWidget(self.date)
+        self.layout.addWidget(QLabel("Time:"))
+        self.layout.addWidget(self.time)
+        self.layout.addWidget(QLabel("Description:"))
+        self.layout.addWidget(self.description)
+        self.layout.addWidget(QLabel("Prescription:"))
+        self.layout.addWidget(self.prescription)
 
-    def get_record_data(self):
-        return {
-            "date": self.date_input.date().toString("yyyy-MM-dd"),
-            "doctor_id": self.doctor_id_input.text(),
-            "time": self.time_input.time().toString("HH:mm"),
-            "description": self.description_input.toPlainText(),
-            "prescription": self.prescription_input.toPlainText()
-        }
+        if editable:
+            self.save_button = QPushButton("Save")
+            self.save_button.clicked.connect(self.save_record)
+            self.layout.addWidget(self.save_button)
+        else:
+            for widget in [self.patient_name, self.doctor_name, self.date, self.time, self.description, self.prescription]:
+                widget.setReadOnly(True)
 
-class RecordsScreen(QWidget):
-    def __init__(self):
+        if record_id:
+            self.load_record()
+
+    def load_record(self):
+        conn = sqlite3.connect('CallADoctor.db')
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM Records WHERE Record_ID = ?", (self.record_id,))
+        record = cursor.fetchone()
+        conn.close()
+
+        if record:
+            self.patient_name.setText(record[2])
+            self.doctor_name.setText(record[4])
+            self.date.setDate(QDate.fromString(record[5], "yyyy-MM-dd"))
+            self.time.setTime(QTime.fromString(record[6], "HH:mm:ss"))
+            self.description.setText(record[7])
+            self.prescription.setText(record[8])
+
+    def save_record(self):
+        conn = sqlite3.connect('CallADoctor.db')
+        cursor = conn.cursor()
+        try:
+            if self.record_id:
+                cursor.execute("""
+                    UPDATE Records 
+                    SET Patient_Name = ?, Doctor_Name = ?, Date = ?, Time = ?, Description = ?, Prescription = ?
+                    WHERE Record_ID = ?
+                """, (self.patient_name.text(), self.doctor_name.text(), self.date.date().toString("yyyy-MM-dd"), 
+                      self.time.time().toString("HH:mm:ss"), self.description.toPlainText(), 
+                      self.prescription.toPlainText(), self.record_id))
+            else:
+                cursor.execute("""
+                    INSERT INTO Records (Clinic_ID, Patient_Name, Doctor_Name, Date, Time, Description, Prescription)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (self.clinic_id, self.patient_name.text(), self.doctor_name.text(), self.date.date().toString("yyyy-MM-dd"), 
+                      self.time.time().toString("HH:mm:ss"), self.description.toPlainText(), 
+                      self.prescription.toPlainText()))
+            conn.commit()
+            QMessageBox.information(self, "Success", "Record saved successfully.")
+            self.accept()
+        except sqlite3.Error as e:
+            QMessageBox.critical(self, "Error", f"An error occurred: {e}")
+        finally:
+            conn.close()
+
+
+class RecordsScreen(BaseScreen):
+    def __init__(self, clinic_id):
         super().__init__()
-        self.initUI()
-
-    def initUI(self):
-        # Create table to display records
-        self.records_table = QTableWidget()
-        self.records_table.setColumnCount(6)
-        self.records_table.setHorizontalHeaderLabels(['Record ID', 'Date', 'Doctor ID', 'Time', 'Description', 'Prescription'])
-        self.records_table.setRowCount(0)
-        self.records_table.cellClicked.connect(self.highlight_row)
-
-        # Create buttons for adding and editing records
-        self.add_button = QPushButton('Add Record')
+        self.clinic_id = clinic_id
+        self.current_sort_index = 0
+        self.sort_order = Qt.AscendingOrder
+        self.sort_combo.addItems(["Patient Name", "Doctor Name", "Date"])
         self.add_button.clicked.connect(self.add_record)
-        self.edit_button = QPushButton('Edit Record')
         self.edit_button.clicked.connect(self.edit_record)
-        self.edit_button.setEnabled(False)
+        self.list_widget.itemClicked.connect(self.on_item_clicked)
+        self.list_widget.itemDoubleClicked.connect(self.view_record)
+        self.delete_button.setParent(None)
+        self.load_data()
 
-        # Create layout for records screen
-        button_layout = QHBoxLayout()
-        button_layout.addWidget(self.add_button)
-        button_layout.addWidget(self.edit_button)
-        button_layout.addStretch()
+    def load_data(self):
+        self.list_widget.clear()
+        try:
+            conn = sqlite3.connect('CallADoctor.db')
+            cursor = conn.cursor()
+            cursor.execute("SELECT Record_ID, Patient_Name, Doctor_Name, Date FROM Records WHERE Clinic_ID = ?", (self.clinic_id,))
+            records = cursor.fetchall()
+            conn.close()
 
-        records_layout = QVBoxLayout()
-        records_layout.addWidget(self.records_table)
-        records_layout.addLayout(button_layout)
+            for record in records:
+                item = QListWidgetItem(self.list_widget)
+                item_widget = CustomListItem(
+                    record[0],
+                    f"Patient: {record[1]}",
+                    f"Doctor: {record[2]} | Date: {record[3]}"
+                )
+                item.setSizeHint(item_widget.sizeHint())
+                self.list_widget.addItem(item)
+                self.list_widget.setItemWidget(item, item_widget)
+        except sqlite3.Error as e:
+            QMessageBox.critical(self, "Database Error", f"An error occurred: {e}")
 
-        self.setLayout(records_layout)
-
-    def highlight_row(self, row, column):
-        self.records_table.selectRow(row)
+    def on_item_clicked(self, item):
         self.edit_button.setEnabled(True)
 
+    def sort_items(self):
+        try:
+            items = []
+            for i in range(self.list_widget.count()):
+                item = self.list_widget.item(i)
+                widget = self.list_widget.itemWidget(item)
+                if widget:
+                    items.append((widget.id, widget.findChild(QLabel).text(), widget.findChildren(QLabel)[1].text()))
+
+            reverse = self.sort_order == Qt.DescendingOrder
+            if self.current_sort_index == 0:  # Sort by Patient Name
+                items.sort(key=lambda x: x[1].split(': ')[-1], reverse=reverse)
+            elif self.current_sort_index == 1:  # Sort by Doctor Name
+                items.sort(key=lambda x: x[2].split('|')[0].split(': ')[-1], reverse=reverse)
+            elif self.current_sort_index == 2:  # Sort by Date
+                items.sort(key=lambda x: x[2].split('|')[1].split(': ')[-1], reverse=reverse)
+
+            self.list_widget.clear()
+            for id, main_text, sub_text in items:
+                item = QListWidgetItem(self.list_widget)
+                item_widget = CustomListItem(id, main_text, sub_text)
+                item.setSizeHint(item_widget.sizeHint())
+                self.list_widget.addItem(item)
+                self.list_widget.setItemWidget(item, item_widget)
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"An error occurred while sorting: {e}")
+
+
+    def on_sort_changed(self, index):
+        self.current_sort_index = index
+        self.sort_items()
+
+    def update_sort_indicator(self, index):
+        pass
+
+    def view_record(self, item):
+        record_id = self.list_widget.itemWidget(item).id
+        dialog = RecordViewDialog(record_id, self)
+        dialog.exec_()
+
     def add_record(self):
-        dialog = RecordDialog(self)
-        if dialog.exec_() == QDialog.Accepted:
-            record_data = dialog.get_record_data()
-
-            # Generate a unique record ID 
-            record_id = str(self.records_table.rowCount() + 1)
-
-            # Add the new record to the table
-            row_count = self.records_table.rowCount()
-            self.records_table.insertRow(row_count)
-            self.records_table.setItem(row_count, 0, QTableWidgetItem(record_id))
-            self.records_table.setItem(row_count, 1, QTableWidgetItem(record_data["date"]))
-            self.records_table.setItem(row_count, 2, QTableWidgetItem(record_data["doctor_id"]))
-            self.records_table.setItem(row_count, 3, QTableWidgetItem(record_data["time"]))
-            self.records_table.setItem(row_count, 4, QTableWidgetItem(record_data["description"]))
-            self.records_table.setItem(row_count, 5, QTableWidgetItem(record_data["prescription"]))
+        dialog = RecordDetailDialog(parent=self, editable=True)
+        if dialog.exec_():
+            self.load_data()
 
     def edit_record(self):
-        selected_row = self.records_table.currentRow()
-        if selected_row >= 0:
-            record_data = {
-                "date": self.records_table.item(selected_row, 1).text(),
-                "doctor_id": self.records_table.item(selected_row, 2).text(),
-                "time": self.records_table.item(selected_row, 3).text(),
-                "description": self.records_table.item(selected_row, 4).text(),
-                "prescription": self.records_table.item(selected_row, 5).text()
-            }
-            dialog = RecordDialog(self, record_data)
+        selected_items = self.list_widget.selectedItems()
+        if selected_items:
+            record_id = self.list_widget.itemWidget(selected_items[0]).id
+            dialog = RecordDetailDialog(record_id, self, editable=True)
             if dialog.exec_() == QDialog.Accepted:
-                updated_data = dialog.get_record_data()
-                self.records_table.setItem(selected_row, 1, QTableWidgetItem(updated_data["date"]))
-                self.records_table.setItem(selected_row, 2, QTableWidgetItem(updated_data["doctor_id"]))
-                self.records_table.setItem(selected_row, 3, QTableWidgetItem(updated_data["time"]))
-                self.records_table.setItem(selected_row, 4, QTableWidgetItem(updated_data["description"]))
-                self.records_table.setItem(selected_row, 5, QTableWidgetItem(updated_data["prescription"]))
+                self.load_data()
+        else:
+            QMessageBox.warning(self, "No Selection", "Please select a record to edit.")
+    
+    def toggle_sort_order(self):
+        self.sort_order = Qt.DescendingOrder if self.sort_order == Qt.AscendingOrder else Qt.AscendingOrder
+        self.sort_order_button.setIcon(QIcon("icon/sort-down-solid.svg" if self.sort_order == Qt.DescendingOrder else "icon/sort-up-solid.svg"))
+        self.sort_items()
+

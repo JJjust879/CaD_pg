@@ -1,23 +1,29 @@
 import sys
-from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
-    QPushButton, QTextEdit, QCalendarWidget, QFileDialog, QSplitter, 
-    QSizePolicy, QStackedWidget, QToolTip, QButtonGroup
-)
+import os
+import folium
+import sqlite3
+from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
+                             QPushButton, QTextEdit, QCalendarWidget, QFileDialog, QSplitter, QSizePolicy, QStackedWidget, QToolTip,
+                             QButtonGroup, QFormLayout, QComboBox, QTimeEdit)
 from PyQt5.QtGui import QFont, QCursor
-from PyQt5.QtCore import QTimer, Qt, QProcess
-from Map_v2 import MapHomePage  # Ensure MapHomePage is correctly imported
+from PyQt5.QtCore import QTimer, Qt, QDate, QTime
+from Map_v2 import MapHomePage
+from health_rec import PersonalHealthRecordWindow
+from Profile_v1 import ProfileWindow
 
 class AppointmentSystem(QMainWindow):
-    def __init__(self):
+    def __init__(self, patient_id):
         super().__init__()
+        self.patient_id = patient_id
         self.setWindowTitle("Call a Doctor - Appointment System")
         self.resize(1920, 1080)
         self.center_window()
         self.initUI()
 
+        self.current_secondary_window = None
+
     def center_window(self):
-        screen_geometry = QApplication.desktop().screenGeometry()
+        screen_geometry = QApplication.primaryScreen().geometry()
         x = (screen_geometry.width() - self.width()) // 2
         y = (screen_geometry.height() - self.height()) // 2
         self.move(x, y)
@@ -36,6 +42,19 @@ class AppointmentSystem(QMainWindow):
         top_layout = QHBoxLayout()
         layout.addLayout(top_layout)
 
+        # Clinic Selection Label
+        clinic_label = QLabel("Please Select Clinic")
+        clinic_label.setFont(QFont("Helvetica", 12, QFont.Bold))
+        top_layout.addWidget(clinic_label)
+
+        # Add Clinic Selection Dropdown
+        self.clinic_dropdown = QComboBox()
+        self.clinic_dropdown.setFont(QFont("Helvetica", 10))
+        clinics = ["Clinic B.S Tan", "Clinic Lee", "Clinic Singapore", "Clinic Tropica", "Clinic Koe", "Clinic Medivirion", "Clinic Kesihatan Bayan Lepas", "Clinic Kare", "Clinic Health Plus", "Clinic Bayan Baru"]
+        self.clinic_dropdown.addItems(clinics)
+        self.clinic_dropdown.setMinimumWidth(200)  # Set a minimum width to make the dropdown bigger
+        top_layout.addWidget(self.clinic_dropdown)
+
         top_layout.addStretch()  # Add stretch to push the button to the right
         logout_btn = QPushButton("Logout")
         logout_btn.setFont(QFont("Helvetica", 10))
@@ -51,11 +70,8 @@ class AppointmentSystem(QMainWindow):
         splitter.addWidget(self.right_panel)
 
         handle = splitter.handle(1)
-        handle.setStyleSheet("background-color: #CCCCCC;")
-        handle.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
-        handle.setToolTip("Adjust Panel")
-        QToolTip.setFont(QFont('Helvetica', 10))
-        handle.setCursor(QCursor(Qt.SplitHCursor))
+        handle.setStyleSheet("QSplitterHandle { background-color: lightgray }")
+        handle.setDisabled(True)
 
         layout.addWidget(splitter)
         self.create_tab_navigation(layout)
@@ -73,6 +89,15 @@ class AppointmentSystem(QMainWindow):
         self.calendar = QCalendarWidget()
         left_layout.addWidget(self.calendar)
 
+        time_label = QLabel("Select Appointment Time:")
+        time_label.setFont(QFont("Helvetica", 10))
+        left_layout.addWidget(time_label)
+
+        self.time_edit = QTimeEdit()
+        self.time_edit.setFont(QFont("Helvetica", 10))
+        self.time_edit.setTime(QTime.currentTime())
+        left_layout.addWidget(self.time_edit)
+
         doctor_label = QLabel("Available Doctors:")
         doctor_label.setFont(QFont("Helvetica", 10))
         left_layout.addWidget(doctor_label)
@@ -85,49 +110,27 @@ class AppointmentSystem(QMainWindow):
 
     def create_right_panel(self):
         right_panel = QWidget()
-        right_layout = QVBoxLayout()
+        right_layout = QFormLayout()
         right_panel.setLayout(right_layout)
 
         self.doctor_info_label = QLabel("Doctor's Information:")
         self.doctor_info_label.setFont(QFont("Helvetica", 10))
-        right_layout.addWidget(self.doctor_info_label)
+        right_layout.addRow(self.doctor_info_label)
 
-        self.purpose_label = QLabel("Purpose of Visit:")
-        self.purpose_label.setFont(QFont("Helvetica", 10))
-        right_layout.addWidget(self.purpose_label)
-
-        self.medical_checkup_btn = QPushButton("Medical Checkup")
-        self.collect_report_btn = QPushButton("Collect Health Report")
-        self.custom_inquiry_btn = QPushButton("Custom Inquiry")
-        self.medical_checkup_btn.setFont(QFont("Helvetica", 10))
-        self.collect_report_btn.setFont(QFont("Helvetica", 10))
-        self.custom_inquiry_btn.setFont(QFont("Helvetica", 10))
-        
-        self.inquiry_button_group = QButtonGroup()
-        self.inquiry_button_group.addButton(self.medical_checkup_btn)
-        self.inquiry_button_group.addButton(self.collect_report_btn)
-        self.inquiry_button_group.addButton(self.custom_inquiry_btn)
-        self.custom_inquiry_btn.setCheckable(True)
-
-        right_layout.addWidget(self.medical_checkup_btn)
-        right_layout.addWidget(self.collect_report_btn)
-        right_layout.addWidget(self.custom_inquiry_btn)
-
-        self.custom_inquiry_box = QTextEdit()
-        self.custom_inquiry_box.setPlaceholderText("Type your custom inquiry (max 150 words)")
-        self.custom_inquiry_box.hide()
-        right_layout.addWidget(self.custom_inquiry_box)
-
-        self.upload_btn = QPushButton("Upload Present Medical Report")
-        self.upload_btn.setFont(QFont("Helvetica", 10))
-        right_layout.addWidget(self.upload_btn)
+        self.doctor_info_box = QTextEdit()
+        self.doctor_info_box.setReadOnly(True)
+        right_layout.addRow(self.doctor_info_box)
 
         self.send_btn = QPushButton("Send Appointment")
         self.send_btn.setFont(QFont("Helvetica", 12, QFont.Bold))
-        right_layout.addWidget(self.send_btn)
+        right_layout.addRow(self.send_btn)
 
-        self.custom_inquiry_btn.clicked.connect(self.toggle_custom_inquiry_box)
-        self.upload_btn.clicked.connect(self.upload_medical_report)
+        self.error_label = QLabel("")
+        self.error_label.setFont(QFont("Helvetica", 10))
+        self.error_label.setStyleSheet("color: red;")
+        self.error_label.setVisible(False)
+        right_layout.addRow(self.error_label)
+
         self.send_btn.clicked.connect(self.send_appointment)
 
         return right_panel
@@ -140,43 +143,58 @@ class AppointmentSystem(QMainWindow):
         for btn_text in buttons:
             btn = QPushButton(btn_text)
             btn.setFont(QFont("Helvetica", 10))
+            btn.setStyleSheet("background-color: #3e8e41; color: white; border: none;")
             tab_layout.addWidget(btn)
             if btn_text == "Profile":
                 btn.clicked.connect(self.show_profile_window)
             elif btn_text == "Map":
                 btn.clicked.connect(self.show_map_window)
+            elif btn_text == "Health Record":
+                btn.clicked.connect(self.show_health_record_window)
 
     def create_success_screen(self):
         self.success_widget = QWidget()
         success_layout = QVBoxLayout()
         self.success_widget.setLayout(success_layout)
 
-        self.success_label = QLabel("Appointment Successful")
-        self.success_label.setStyleSheet("background-color: lightgreen; color: black; font-size: 20px;")
+        self.success_label = QLabel("Appointment Request Sent")
+        self.success_label.setStyleSheet("background-color: lightgreen; color: black; font-size: 50px;")
         self.success_label.setAlignment(Qt.AlignCenter)
         success_layout.addWidget(self.success_label)
 
         self.stacked_widget.addWidget(self.success_widget)
 
-    def toggle_custom_inquiry_box(self):
-        self.custom_inquiry_box.setVisible(self.custom_inquiry_btn.isChecked())
-
-    def upload_medical_report(self):
-        options = QFileDialog.Options()
-        file_name, _ = QFileDialog.getOpenFileName(self, "Upload Medical Report", "", "All Files (*);;Text Files (*.txt)", options=options)
-        if file_name:
-            print(f"Uploaded file: {file_name}")
-        else:
-            print("File upload canceled or failed")
-
     def send_appointment(self):
-        self.send_btn.setDisabled(True)
-        QTimer.singleShot(3000, self.show_success_screen)
+        selected_date = self.calendar.selectedDate()
+        current_date = QDate.currentDate()
+        selected_time = self.time_edit.time()
+        current_time = QTime.currentTime()
+
+        if selected_date < current_date or (selected_date == current_date and selected_time < current_time):
+            self.error_label.setText("Invalid Date or Time")
+            self.error_label.setVisible(True)
+        else:
+            self.error_label.setVisible(False)
+            self.send_btn.setDisabled(True)
+            
+            conn = sqlite3.connect('CallADoctor.db')
+            cursor = conn.cursor()
+            try:
+                cursor.execute('''
+                    INSERT INTO Appointments (Patient_ID, Appointment_Date, Appointment_Time, Clinic)
+                    VALUES (?, ?, ?, ?)
+                ''', (self.patient_id, selected_date.toString(Qt.DateFormat.ISODate), selected_time.toString(), self.clinic_dropdown.currentText()))
+                conn.commit()
+                QTimer.singleShot(3000, self.show_success_screen)
+            except sqlite3.Error as e:
+                self.error_label.setText(f"Database error: {e}")
+                self.error_label.setVisible(True)
+            finally:
+                conn.close()
 
     def show_success_screen(self):
         self.stacked_widget.setCurrentIndex(1)
         self.success_label.setFont(QFont("Arial", 40, QFont.Bold))
-        self.custom_inquiry_box.clear()
         QTimer.singleShot(3000, self.show_main_screen)
 
     def show_main_screen(self):
@@ -184,18 +202,36 @@ class AppointmentSystem(QMainWindow):
         self.send_btn.setDisabled(False)
 
     def show_profile_window(self):
-        self.process = QProcess(self)
-        self.process.start("python", ["Profile_v1.py"])
+        self.profile_window = ProfileWindow()
+        self.profile_window.show()
 
     def show_map_window(self):
-        self.map_homepage = MapHomePage()
-        self.map_homepage.show()
+        if not self.current_secondary_window or not isinstance(self.current_secondary_window, MapHomePage):
+            self.current_secondary_window = MapHomePage()
+        if self.current_secondary_window:
+            self.current_secondary_window.destroyed.connect(self.secondary_window_closed)
+            self.current_secondary_window.show()
+
+    def show_health_record_window(self):
+        if not self.current_secondary_window or not isinstance(self.current_secondary_window, PersonalHealthRecordWindow):
+            self.current_secondary_window = PersonalHealthRecordWindow(self.patient_id)
+        if self.current_secondary_window:
+            self.current_secondary_window.destroyed.connect(self.secondary_window_closed)
+            self.current_secondary_window.show()
+
+    def secondary_window_closed(self):
+        self.current_secondary_window = None
 
     def logout(self):
         QApplication.quit()
 
 if __name__ == "__main__":
+    print("Received arguments:", sys.argv)
     app = QApplication(sys.argv)
-    window = AppointmentSystem()
+    if len(sys.argv) > 1:
+        patient_id = sys.argv[1]
+        window = AppointmentSystem(patient_id)
+    else:
+        window = AppointmentSystem()  # for testing without patient_id
     window.show()
     sys.exit(app.exec_())

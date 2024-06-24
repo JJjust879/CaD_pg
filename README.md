@@ -50,18 +50,17 @@ Call A Doctor is a comprehensive healthcare management system designed to facili
 ### Key Components
 - `startupwindow.py`: Initial interface for user role selection
 - `clinic_dashboard.py`: Main interface for clinic operations
-- : Main interface for patient operations
-- : Main interface for doctor operations
-- : Main interface for clinic operations
-- : Main interface for admin operations
-- : ?
+- `Appoint_v1.py`: Main interface for patient operations
+- `Doctor.py`: Main interface for doctor operations
+- `admin.py`: Main interface for admin operations
 
 ## Setup and Running
 
 1. Ensure Python 3.x is installed on your system
 2. Install required dependencies:
 - pip install PyQt5/6 sqlite3
-3. Run the main application:
+3. Ensure all code is in a single file
+4. Run the main application:
 - python startupwindow.py
 
 ## Note for Developers

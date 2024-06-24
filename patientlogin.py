@@ -124,7 +124,7 @@ class Ui_PatientLogin(object):
         _translate = QtCore.QCoreApplication.translate
         self.Login.setText(_translate("PatientLogin", "Login"))
         self.Password.setText(_translate("PatientLogin", "Password:"))
-        self.Username.setText(_translate("PatientLogin", "Username:"))
+        self.Username.setText(_translate("PatientLogin", "Email:"))
         self.Back.setText(_translate("PatientLogin", "Back"))
         self.checkBox.setText(_translate("PatientLogin", "Show Password"))
 

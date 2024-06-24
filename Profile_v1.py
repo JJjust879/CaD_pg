@@ -1,4 +1,5 @@
 import sys
+import sqlite3
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
     QLabel, QPushButton, QLineEdit, QFileDialog, QTextEdit, QSizePolicy, 
@@ -8,12 +9,14 @@ from PyQt5.QtGui import QFont, QPixmap
 from PyQt5.QtCore import Qt, QDate
 
 class ProfileWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, patient_id):
         super().__init__()
+        self.patient_id = patient_id
         self.setWindowTitle("Personal Profile")
         self.setGeometry(0, 0, 1920, 1080)  # Set initial window size to 1920x1080
         self.setStyleSheet("background-color: #f0f0f0; font-family: Helvetica; font-size: 11pt;")
         self.initUI()
+        self.load_profile_data()
 
     def initUI(self):
         scroll_area = QScrollArea()
@@ -148,7 +151,31 @@ class ProfileWindow(QMainWindow):
         self.upload_btn.setEnabled(True)
         self.edit_btn.setEnabled(False)
         self.save_btn.setEnabled(True)
+    
+    def load_profile_data(self):
+        conn = sqlite3.connect('CallADoctor.db')
+        cursor = conn.cursor()
 
+        try:
+            cursor.execute("SELECT * FROM Patient WHERE patient_id = ?", (self.patient_id,))
+            patient_data = cursor.fetchone()
+
+            if patient_data:
+                self.fields['Name'].setText(patient_data[1])
+                self.fields['Age'].setText(str(patient_data[2]))
+                self.fields['Sex/Gender'].setCurrentText(patient_data[3])
+                self.fields['Home Address'].setText(patient_data[4])
+                self.fields['Phone Number'].setText(patient_data[5])
+                self.fields['Password'].setText(patient_data[7])
+                self.fields['Email'].setText(patient_data[6])
+            else:
+                QMessageBox.warning(self, "Error", "Patient data not found.")
+        
+        except sqlite3.Error as e:
+            QMessageBox.critical(self, "Database Error", f"An error occurred: {e}")
+
+        finally:
+            conn.close()
     def save_profile(self):
         profile_data = {}
         for label, entry in self.fields.items():
@@ -173,17 +200,17 @@ class ProfileWindow(QMainWindow):
 
     def show_map_window(self):
         from Map_v2 import MapHomePage
-        self.map_window = MapHomePage()
+        self.map_window = MapHomePage(self.patient_id)
         self.map_window.show()
 
     def show_appointment_window(self):
         from Appoint_v1 import AppointmentSystem
-        self.appointment_window = AppointmentSystem()
+        self.appointment_window = AppointmentSystem(self.patient_id)
         self.appointment_window.show()
 
     def show_health_record_window(self):
         from health_rec import PersonalHealthRecordWindow
-        self.health_record_window = PersonalHealthRecordWindow()
+        self.health_record_window = PersonalHealthRecordWindow(self.patient_id)
         self.health_record_window.show()
 
     def logout(self):
@@ -191,6 +218,10 @@ class ProfileWindow(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    profile_window = ProfileWindow()
+    if len(sys.argv) > 1:
+        patient_id = sys.argv[1]
+        profile_window = ProfileWindow(patient_id)
+    else:
+        profile_window = ProfileWindow("default_patient_id")  # for testing without patient_id
     profile_window.show()
     sys.exit(app.exec_())

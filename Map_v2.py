@@ -13,8 +13,9 @@ from health_rec import PersonalHealthRecordWindow
 
 
 class MapHomePage(QMainWindow):
-    def __init__(self):
+    def __init__(self, patient_id):
         super().__init__()
+        self.patient_id = patient_id
         self.marker_data = []  # Initialize the marker_data attribute
         self.initUI()
 
@@ -143,15 +144,18 @@ class MapHomePage(QMainWindow):
         folium_map.save(map_path)
 
     def launch_profile_window(self):
-        subprocess.Popen(["python", "Profile_v1.py"])  # Adjust path as needed
+        from Profile_v1 import ProfileWindow
+        self.profile_window = ProfileWindow(self.patient_id)
+        self.profile_window.show()
 
     def launch_health_record_window(self):
-        self.health_record_window = PersonalHealthRecordWindow()
+        from health_rec import PersonalHealthRecordWindow
+        self.health_record_window = PersonalHealthRecordWindow(self.patient_id)
         self.health_record_window.show()
 
     def open_appointment_system(self):
         from Appoint_v1 import AppointmentSystem
-        self.appointment_system = AppointmentSystem()
+        self.appointment_system = AppointmentSystem(self.patient_id)
         self.appointment_system.show()
 
     def logout(self):

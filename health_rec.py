@@ -118,12 +118,12 @@ class PersonalHealthRecordWindow(QMainWindow):
 
     def show_profile_window(self):
         from Profile_v1 import ProfileWindow
-        self.profile_window = ProfileWindow()
+        self.profile_window = ProfileWindow(self.patient_id)
         self.profile_window.show()
 
     def show_map_window(self):
         from Map_v2 import MapHomePage
-        self.map_window = MapHomePage()
+        self.map_window = MapHomePage(self.patient_id)
         self.map_window.show()
 
     def show_appointment_window(self):

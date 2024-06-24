@@ -4,21 +4,26 @@ import folium
 import sqlite3
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                              QPushButton, QTextEdit, QCalendarWidget, QFileDialog, QSplitter, QSizePolicy, QStackedWidget, QToolTip,
-                             QButtonGroup, QFormLayout, QComboBox, QTimeEdit)
+                             QButtonGroup, QFormLayout, QComboBox, QTimeEdit, QListWidget, QListWidgetItem)
 from PyQt5.QtGui import QFont, QCursor
 from PyQt5.QtCore import QTimer, Qt, QDate, QTime
 from Map_v2 import MapHomePage
 from health_rec import PersonalHealthRecordWindow
 from Profile_v1 import ProfileWindow
+from database import fetch_records
 
 class AppointmentSystem(QMainWindow):
     def __init__(self, patient_id):
         super().__init__()
         self.patient_id = patient_id
+        self.selected_doctor_id = None
+        self.selected_doctor_name = None
         self.setWindowTitle("Call a Doctor - Appointment System")
         self.resize(1920, 1080)
         self.center_window()
         self.initUI()
+        self.update_available_doctors()
+
 
         self.current_secondary_window = None
 
@@ -53,6 +58,7 @@ class AppointmentSystem(QMainWindow):
         clinics = ["Clinic B.S Tan", "Clinic Lee", "Clinic Singapore", "Clinic Tropica", "Clinic Koe", "Clinic Medivirion", "Clinic Kesihatan Bayan Lepas", "Clinic Kare", "Clinic Health Plus", "Clinic Bayan Baru"]
         self.clinic_dropdown.addItems(clinics)
         self.clinic_dropdown.setMinimumWidth(200)  # Set a minimum width to make the dropdown bigger
+        self.clinic_dropdown.currentIndexChanged.connect(self.update_available_doctors)
         top_layout.addWidget(self.clinic_dropdown)
 
         top_layout.addStretch()  # Add stretch to push the button to the right
@@ -102,9 +108,11 @@ class AppointmentSystem(QMainWindow):
         doctor_label.setFont(QFont("Helvetica", 10))
         left_layout.addWidget(doctor_label)
 
-        self.doctor_list = QTextEdit()
-        self.doctor_list.setReadOnly(True)
+        self.doctor_list = QListWidget()  # Change to QListWidget
+        self.doctor_list.itemClicked.connect(self.on_doctor_selected)
         left_layout.addWidget(self.doctor_list)
+
+        self.update_available_doctors()
 
         return left_panel
 
@@ -132,7 +140,7 @@ class AppointmentSystem(QMainWindow):
         right_layout.addRow(self.error_label)
 
         self.send_btn.clicked.connect(self.send_appointment)
-
+        
         return right_panel
 
     def create_tab_navigation(self, layout):
@@ -164,7 +172,55 @@ class AppointmentSystem(QMainWindow):
 
         self.stacked_widget.addWidget(self.success_widget)
 
+
+    def update_available_doctors(self):
+        selected_clinic = self.clinic_dropdown.currentText()
+        conn = sqlite3.connect('CallADoctor.db')
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute("SELECT Clinic_ID FROM Clinic WHERE Clinic_Name = ?", (selected_clinic,))
+            clinic_id = cursor.fetchone()
+            
+            if clinic_id:
+                clinic_id = clinic_id[0]
+                cursor.execute("""
+                    SELECT Doctor_ID, Doctor_Name, Doctor_Specialization 
+                    FROM Doctor 
+                    WHERE Clinic_ID = ?
+                """, (clinic_id,))
+                
+                doctors = cursor.fetchall()
+                
+                self.doctor_list.clear()
+                
+                for doctor in doctors:
+                    item = QListWidgetItem(f"Dr. {doctor[1]} - {doctor[2]}")
+                    item.setData(Qt.UserRole, doctor[0])  # Store Doctor_ID
+                    self.doctor_list.addItem(item)
+            else:
+                self.doctor_list.clear()
+                self.doctor_list.addItem("No clinic selected or clinic not found.")
+        
+        except sqlite3.Error as e:
+            print(f"Database error: {e}")
+            self.doctor_list.clear()
+            self.doctor_list.addItem("Error fetching doctors.")
+        
+        finally:
+            conn.close()
+
+    def on_doctor_selected(self, item):
+        self.selected_doctor_id = item.data(Qt.UserRole)
+        self.selected_doctor_name = item.text().split(' - ')[0]
+        self.doctor_info_box.setText(f"Selected Doctor: {self.selected_doctor_name}")
+
     def send_appointment(self):
+        if not self.selected_doctor_id:
+            self.error_label.setText("Please select a doctor")
+            self.error_label.setVisible(True)
+            return
+
         selected_date = self.calendar.selectedDate()
         current_date = QDate.currentDate()
         selected_time = self.time_edit.time()
@@ -181,38 +237,35 @@ class AppointmentSystem(QMainWindow):
             cursor = conn.cursor()
 
             try:
-                # Fetch the patient's name using patient_id
+                selected_clinic = self.clinic_dropdown.currentText()
+                cursor.execute("SELECT Clinic_ID FROM Clinic WHERE Clinic_Name = ?", (selected_clinic,))
+                clinic_id = cursor.fetchone()[0]
+
+                cursor.execute("SELECT Patient_Name FROM Patient WHERE Patient_ID = ?", (self.patient_id,))
+                patient_name = cursor.fetchone()[0]
+
                 cursor.execute('''
-                    SELECT Patient_Name FROM Patient 
-                    WHERE Patient_ID = ?
-                ''', (self.patient_id,))
-                patient_name = cursor.fetchone()
-
-                if patient_name:
-                    patient_name = patient_name[0]
-
-                    # Insert the appointment with the fetched patient name
-                    cursor.execute('''
-                        INSERT INTO Appointments (Patient_ID, Appointment_Date, Appointment_Time, Clinic_ID, Patient_Name)
-                        VALUES (?, ?, ?, ?, ?)
-                    ''', (self.patient_id, selected_date.toString(Qt.DateFormat.ISODate), selected_time.toString(), self.clinic_dropdown.currentText(), patient_name))
-                    conn.commit()
-                    QTimer.singleShot(3000, self.show_success_screen)
-                else:
-                    self.error_label.setText("Patient not found")
-                    self.error_label.setVisible(True)
-
+                    INSERT INTO Appointments 
+                    (Clinic_ID, Patient_ID, Patient_Name, Doctor_ID, Doctor_Name, Appointment_Date, Appointment_Time, Appointment_Approval)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (clinic_id, self.patient_id, patient_name, self.selected_doctor_id, self.selected_doctor_name,
+                      selected_date.toString(Qt.DateFormat.ISODate), 
+                      selected_time.toString(), 'Pending'))
+                
+                conn.commit()
+                QTimer.singleShot(3000, self.show_success_screen)
             except sqlite3.Error as e:
                 self.error_label.setText(f"Database error: {e}")
                 self.error_label.setVisible(True)
-
             finally:
                 conn.close()
+                self.send_btn.setDisabled(False)
 
 
     def show_success_screen(self):
         self.stacked_widget.setCurrentIndex(1)
-        self.success_label.setFont(QFont("Arial", 40, QFont.Bold))
+        self.success_label.setText("Appointment Request Sent\nAwaiting Clinic Approval")
+        self.success_label.setFont(QFont("Arial", 30, QFont.Bold))
         QTimer.singleShot(3000, self.show_main_screen)
 
     def show_main_screen(self):
@@ -220,22 +273,19 @@ class AppointmentSystem(QMainWindow):
         self.send_btn.setDisabled(False)
 
     def show_profile_window(self):
-        self.profile_window = ProfileWindow()
+        from Profile_v1 import ProfileWindow
+        self.profile_window = ProfileWindow(self.patient_id)  # Pass patient_id
         self.profile_window.show()
 
     def show_map_window(self):
-        if not self.current_secondary_window or not isinstance(self.current_secondary_window, MapHomePage):
-            self.current_secondary_window = MapHomePage()
-        if self.current_secondary_window:
-            self.current_secondary_window.destroyed.connect(self.secondary_window_closed)
-            self.current_secondary_window.show()
+        from Map_v2 import MapHomePage
+        self.map_window = MapHomePage(self.patient_id)
+        self.map_window.show()
 
     def show_health_record_window(self):
-        if not self.current_secondary_window or not isinstance(self.current_secondary_window, PersonalHealthRecordWindow):
-            self.current_secondary_window = PersonalHealthRecordWindow(self.patient_id)
-        if self.current_secondary_window:
-            self.current_secondary_window.destroyed.connect(self.secondary_window_closed)
-            self.current_secondary_window.show()
+        from health_rec import PersonalHealthRecordWindow
+        self.health_record_window = PersonalHealthRecordWindow(self.patient_id)
+        self.health_record_window.show()
 
     def secondary_window_closed(self):
         self.current_secondary_window = None

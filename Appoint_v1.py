@@ -11,6 +11,7 @@ from Map_v2 import MapHomePage
 from health_rec import PersonalHealthRecordWindow
 from Profile_v1 import ProfileWindow
 from database import fetch_records
+import subprocess
 
 class AppointmentSystem(QMainWindow):
     def __init__(self, patient_id):
@@ -320,7 +321,9 @@ class AppointmentSystem(QMainWindow):
         self.current_secondary_window = None
 
     def logout(self):
+        subprocess.Popen([sys.executable, "startupwindow.py"])
         QApplication.quit()
+
 
 if __name__ == "__main__":
     print("Received arguments:", sys.argv)

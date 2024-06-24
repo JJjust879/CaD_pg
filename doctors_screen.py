@@ -14,37 +14,45 @@ class DoctorViewDialog(ViewDialog):
     def __init__(self, doctor_id, clinic_id, parent=None):
         super().__init__("Doctor Details", parent)
         self.doctor_id = doctor_id
-        self.clinic_id = clinic_id  # Store clinic_id
+        self.clinic_id = clinic_id
         self.load_doctor()
 
     def load_doctor(self):
-        conn = sqlite3.connect('CallADoctor.db')
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM Doctor WHERE Doctor_ID = ? AND Clinic_ID = ?", (self.doctor_id, self.clinic_id))
-        doctor = cursor.fetchone()
-        conn.close()
+        try:
+            conn = sqlite3.connect('CallADoctor.db')
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM Doctor WHERE Doctor_ID = ? AND Clinic_ID = ?", (self.doctor_id, self.clinic_id))
+            doctor = cursor.fetchone()
+            conn.close()
 
-        if doctor:
-            if doctor[8]:  # Assuming the portrait is stored as BLOB
-                pixmap = QPixmap()
-                pixmap.loadFromData(doctor[8])
-                self.add_image(pixmap)
-            self.add_field("Name", f"Dr. {doctor[2]}")
-            self.add_field("Specialization", doctor[3])
-            self.add_field("Age", str(doctor[4]))
-            self.add_field("Gender", doctor[5])
-            self.add_field("Email", doctor[6])
-            self.add_field("Phone", doctor[7])
-        else:
-            QMessageBox.warning(self, "Error", "Doctor not found or you do not have permission to view this doctor.")
+            if doctor:
+                if doctor[8]:  # Assuming the portrait is stored as BLOB
+                    pixmap = QPixmap()
+                    pixmap.loadFromData(doctor[8])
+                    self.add_image(pixmap)
+                self.add_field("Name", f"Dr. {doctor[2]}")
+                self.add_field("Specialization", doctor[3])
+                self.add_field("Age", str(doctor[4]))
+                self.add_field("Gender", doctor[5])
+                self.add_field("Email", doctor[6])
+                self.add_field("Phone", doctor[7])
+            else:
+                QMessageBox.warning(self, "Error", "Doctor not found or you do not have permission to view this doctor.")
+                self.close()
+        except sqlite3.Error as e:
+            QMessageBox.critical(self, "Database Error", f"An error occurred while loading the doctor: {e}")
             self.close()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"An unexpected error occurred: {e}")
+            self.close()
+
 
 
 class DoctorDetailDialog(QDialog):
     def __init__(self, doctor_id=None, clinic_id=None, parent=None, editable=False):
         super().__init__(parent)
         self.doctor_id = doctor_id
-        self.clinic_id = clinic_id  # Store clinic_id
+        self.clinic_id = clinic_id
         self.setWindowTitle("Doctor Details")
         self.layout = QVBoxLayout(self)
 
@@ -112,9 +120,9 @@ class DoctorDetailDialog(QDialog):
             else:
                 raise Exception("Doctor not found")
         except sqlite3.Error as e:
-            raise Exception(f"Database error: {e}")
+            QMessageBox.critical(self, "Database Error", f"An error occurred while loading the doctor: {e}")
         except Exception as e:
-            raise Exception(f"Error loading doctor data: {e}")
+            QMessageBox.critical(self, "Error", f"Error loading doctor data: {e}")
 
     def select_portrait(self):
         file_name, _ = QFileDialog.getOpenFileName(self, "Select Portrait", "", "Image Files (*.png *.jpg *.bmp)")
@@ -156,12 +164,13 @@ class DoctorDetailDialog(QDialog):
             
             conn.commit()
             conn.close()
-            print(f"Doctor {'updated' if self.doctor_id else 'added'}: {self.name.text()}")
             self.accept()
         except sqlite3.Error as e:
             QMessageBox.critical(self, "Database Error", f"An error occurred while saving the doctor: {e}")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"An unexpected error occurred: {e}")
+
+
 
 
 class DoctorsScreen(BaseScreen):
@@ -197,21 +206,19 @@ class DoctorsScreen(BaseScreen):
                 item.setSizeHint(item_widget.sizeHint())
                 self.list_widget.addItem(item)
                 self.list_widget.setItemWidget(item, item_widget)
-
-            print(f"Loaded {self.list_widget.count()} doctors")
         except sqlite3.Error as e:
             QMessageBox.critical(self, "Database Error", f"An error occurred while loading doctors: {e}")
 
     def view_doctor(self, item):
         try:
             doctor_id = self.list_widget.itemWidget(item).id
-            dialog = DoctorViewDialog(doctor_id, self)
+            dialog = DoctorViewDialog(doctor_id, self.clinic_id, self)
             dialog.exec_()
         except Exception as e:
             QMessageBox.critical(self, "Error", f"An error occurred while viewing the doctor: {e}")
 
     def add_doctor(self):
-        dialog = DoctorDetailDialog(parent=self, editable=True, clinic_id=self.clinic_id)  # Pass clinic_id
+        dialog = DoctorDetailDialog(parent=self, editable=True, clinic_id=self.clinic_id)
         if dialog.exec_():
             self.load_data()
 
@@ -219,7 +226,7 @@ class DoctorsScreen(BaseScreen):
         selected_items = self.list_widget.selectedItems()
         if selected_items:
             doctor_id = self.list_widget.itemWidget(selected_items[0]).id
-            dialog = DoctorDetailDialog(doctor_id, self, editable=True, clinic_id=self.clinic_id)  # Pass clinic_id
+            dialog = DoctorDetailDialog(doctor_id, clinic_id=self.clinic_id, parent=self, editable=True)
             if dialog.exec_():
                 self.load_data()
 
@@ -231,12 +238,15 @@ class DoctorsScreen(BaseScreen):
                                          'Are you sure you want to delete this doctor?',
                                          QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
             if reply == QMessageBox.Yes:
-                conn = sqlite3.connect('CallADoctor.db')
-                cursor = conn.cursor()
-                cursor.execute("DELETE FROM Doctor WHERE Doctor_ID = ?", (doctor_id,))
-                conn.commit()
-                conn.close()
-                self.load_data()
+                try:
+                    conn = sqlite3.connect('CallADoctor.db')
+                    cursor = conn.cursor()
+                    cursor.execute("DELETE FROM Doctor WHERE Doctor_ID = ?", (doctor_id,))
+                    conn.commit()
+                    conn.close()
+                    self.load_data()
+                except sqlite3.Error as e:
+                    QMessageBox.critical(self, "Database Error", f"An error occurred while deleting the doctor: {e}")
 
     def sort_items(self):
         try:

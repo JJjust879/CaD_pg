@@ -1,14 +1,15 @@
 import sys
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QTabWidget
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QTabWidget, QPushButton
 from PyQt5.QtGui import QPalette, QColor
 from records_screen import RecordsScreen
 from doctors_screen import DoctorsScreen
 from appointments_screen import AppointmentsScreen
+import subprocess
 
 class ClinicDashboard(QWidget):
-    def __init__(self, clinic_id):  # Accept clinic_id as a parameter
+    def __init__(self, clinic_id):
         super().__init__()
-        self.clinic_id = clinic_id  # Store the clinic_id
+        self.clinic_id = clinic_id
         self.initUI()
 
     def initUI(self):
@@ -19,32 +20,34 @@ class ClinicDashboard(QWidget):
         palette = QPalette()
         palette.setColor(QPalette.ColorRole.Window, QColor(200, 220, 255))
         palette.setColor(QPalette.ColorRole.WindowText, QColor(0, 0, 0))
-        palette.setColor(QPalette.ColorRole.Base, QColor(255, 255, 255))
-        palette.setColor(QPalette.ColorRole.AlternateBase, QColor(220, 220, 220))
-        palette.setColor(QPalette.ColorRole.ToolTipBase, QColor(255, 255, 220))
-        palette.setColor(QPalette.ColorRole.ToolTipText, QColor(0, 0, 0))
-        palette.setColor(QPalette.ColorRole.Text, QColor(0, 0, 0))
-        palette.setColor(QPalette.ColorRole.Button, QColor(200, 220, 255))
-        palette.setColor(QPalette.ColorRole.ButtonText, QColor(0, 0, 0))
-        palette.setColor(QPalette.ColorRole.BrightText, QColor(255, 255, 255))
-        palette.setColor(QPalette.ColorRole.Link, QColor(0, 0, 255))
-        palette.setColor(QPalette.ColorRole.Highlight, QColor(0, 120, 215))
-        palette.setColor(QPalette.ColorRole.HighlightedText, QColor(255, 255, 255))
         self.setPalette(palette)
 
         # Create tabs
         tab_widget = QTabWidget()
-        tab_widget.addTab(RecordsScreen(self.clinic_id), "Records")  # Pass clinic_id to screens if needed
+        tab_widget.addTab(RecordsScreen(self.clinic_id), "Records")
         tab_widget.addTab(DoctorsScreen(self.clinic_id), "Doctors")
         tab_widget.addTab(AppointmentsScreen(self.clinic_id), "Appointments")
 
+        # Add logout button
+        self.logout_button = QPushButton("Logout")
+        self.logout_button.clicked.connect(self.logout)
+
         main_layout = QVBoxLayout()
         main_layout.addWidget(tab_widget)
+        main_layout.addWidget(self.logout_button)
         self.setLayout(main_layout)
+        self.current_window = ClinicDashboard
+
+    def logout(self):
+        subprocess.Popen([sys.executable, "startupwindow.py"])
+        self.current_window.close()
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
-    clinic_id = int(sys.argv[1])  # Get the clinic_id from command-line arguments
-    dashboard = ClinicDashboard(clinic_id)
-    dashboard.show()
-    sys.exit(app.exec_())
+    if len(sys.argv) > 1:
+        clinic_id = int(sys.argv[1])
+        dashboard = ClinicDashboard(clinic_id)
+        dashboard.show()
+        sys.exit(app.exec_())
+    else:
+        print("Please provide a clinic_id as a command-line argument")

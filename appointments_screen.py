@@ -10,7 +10,7 @@ class AppointmentViewDialog(ViewDialog):
     def __init__(self, appointment_id, clinic_id, parent=None):
         super().__init__("Appointment Details", parent)
         self.appointment_id = appointment_id
-        self.clinic_id = clinic_id  # Store clinic_id
+        self.clinic_id = clinic_id
         self.load_appointment()
 
     def load_appointment(self):
@@ -21,11 +21,15 @@ class AppointmentViewDialog(ViewDialog):
         conn.close()
 
         if appointment:
-            self.add_field("Patient Name", appointment[2])
-            self.add_field("Doctor Name", appointment[4])
-            self.add_field("Date", appointment[5])
-            self.add_field("Time", appointment[6])
-            self.add_field("Status", appointment[7])
+            self.add_field("Appointment ID", str(appointment[0]))
+            self.add_field("Clinic ID", str(appointment[1]))
+            self.add_field("Patient ID", str(appointment[2]))
+            self.add_field("Patient Name", appointment[3])
+            self.add_field("Doctor ID", str(appointment[4]))
+            self.add_field("Doctor Name", appointment[5])
+            self.add_field("Date", appointment[6])
+            self.add_field("Time", appointment[7])
+            self.add_field("Status", appointment[8])
         else:
             QMessageBox.warning(self, "Error", "Appointment not found or you do not have permission to view this appointment.")
             self.close()
@@ -131,7 +135,6 @@ class AppointmentsScreen(BaseScreen):
         self.current_sort_index = 0
         self.sort_order = Qt.AscendingOrder
         self.sort_combo.addItems(["Patient Name", "Doctor Name", "Date", "Status"])
-        self.item_selected.connect(self.view_appointment)
         self.sort_combo.currentIndexChanged.connect(self.on_sort_changed)
 
         # Remove add, edit, and delete buttons
@@ -148,6 +151,9 @@ class AppointmentsScreen(BaseScreen):
         button_layout.addWidget(self.approve_button)
         button_layout.addWidget(self.reject_button)
         self.layout.addLayout(button_layout)
+
+        # Connect double-click signal
+        self.list_widget.itemDoubleClicked.connect(self.view_appointment)
 
         self.load_data()
 
@@ -226,8 +232,9 @@ class AppointmentsScreen(BaseScreen):
         self.sort_order_button.setIcon(QIcon(r"C:/Users/nmubu/Desktop/CaD/icon/sort-down-solid.svg" if self.sort_order == Qt.DescendingOrder else r"C:/Users/nmubu/Desktop/CaD/icon/sort-up-solid.svg"))
         self.sort_items()
 
-    def view_appointment(self, appointment_id):
-        dialog = AppointmentViewDialog(appointment_id, self)
+    def view_appointment(self, item):
+        appointment_id = self.list_widget.itemWidget(item).id
+        dialog = AppointmentViewDialog(appointment_id, self.clinic_id, self)
         dialog.exec_()
 
     def approve_appointment(self):

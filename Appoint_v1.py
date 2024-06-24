@@ -176,21 +176,39 @@ class AppointmentSystem(QMainWindow):
         else:
             self.error_label.setVisible(False)
             self.send_btn.setDisabled(True)
-            
+
             conn = sqlite3.connect('CallADoctor.db')
             cursor = conn.cursor()
+
             try:
+                # Fetch the patient's name using patient_id
                 cursor.execute('''
-                    INSERT INTO Appointments (Patient_ID, Appointment_Date, Appointment_Time, Clinic)
-                    VALUES (?, ?, ?, ?)
-                ''', (self.patient_id, selected_date.toString(Qt.DateFormat.ISODate), selected_time.toString(), self.clinic_dropdown.currentText()))
-                conn.commit()
-                QTimer.singleShot(3000, self.show_success_screen)
+                    SELECT Patient_Name FROM Patient 
+                    WHERE Patient_ID = ?
+                ''', (self.patient_id,))
+                patient_name = cursor.fetchone()
+
+                if patient_name:
+                    patient_name = patient_name[0]
+
+                    # Insert the appointment with the fetched patient name
+                    cursor.execute('''
+                        INSERT INTO Appointments (Patient_ID, Appointment_Date, Appointment_Time, Clinic_ID, Patient_Name)
+                        VALUES (?, ?, ?, ?, ?)
+                    ''', (self.patient_id, selected_date.toString(Qt.DateFormat.ISODate), selected_time.toString(), self.clinic_dropdown.currentText(), patient_name))
+                    conn.commit()
+                    QTimer.singleShot(3000, self.show_success_screen)
+                else:
+                    self.error_label.setText("Patient not found")
+                    self.error_label.setVisible(True)
+
             except sqlite3.Error as e:
                 self.error_label.setText(f"Database error: {e}")
                 self.error_label.setVisible(True)
+
             finally:
                 conn.close()
+
 
     def show_success_screen(self):
         self.stacked_widget.setCurrentIndex(1)

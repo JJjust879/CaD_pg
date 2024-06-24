@@ -62,6 +62,7 @@ Call A Doctor is a comprehensive healthcare management system designed to facili
 3. Ensure all code is in a single file
 4. Run the main application:
 - python startupwindow.py
+5. Note* password for doctors are the last 4 digit of doctor’s phone number
 
 ## Note for Developers
 - The system uses a modular architecture for easy expansion and maintenance

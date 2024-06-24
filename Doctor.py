@@ -292,15 +292,20 @@ class Ui_Form(object):
             cursor = connection.cursor()
             try:
                 cursor.execute("""
-                    SELECT p.Patient_Name, p.Patient_Age
+                    SELECT p.Patient_Name, p.Patient_Age, a.Appointment_Date, a.Appointment_Time
                     FROM Appointments a
                     JOIN Patient p ON a.Patient_ID = p.Patient_ID
-                    WHERE a.Doctor_ID = ?
+                    WHERE a.Doctor_ID = ? AND a.Appointment_Approval = "Approved"
                 """, (self.doctor_id,))
                 appointments = cursor.fetchall()
 
                 for appointment in appointments:
-                    self.add_patient_card({"name": appointment['Patient_Name'], "age": appointment['Patient_Age']})
+                    self.add_patient_card({
+                        "name": appointment['Patient_Name'],
+                        "age": appointment['Patient_Age'],
+                        "date": appointment['Appointment_Date'],
+                        "time": appointment['Appointment_Time']
+                    })
             except sqlite3.Error as e:
                 print(f"Error fetching appointments: {e}")
             finally:
@@ -317,35 +322,16 @@ class Ui_Form(object):
 
         name_label = QtWidgets.QLabel(f"Name: {appointment['name']}")
         age_label = QtWidgets.QLabel(f"Age: {appointment['age']}")
+        date_label = QtWidgets.QLabel(f"Date: {appointment['date']}")
+        time_label = QtWidgets.QLabel(f"Time: {appointment['time']}")
 
         layout.addWidget(name_label)
         layout.addWidget(age_label)
-
-        completion_checkbox = QtWidgets.QCheckBox("Appointment Completed")
-        completion_checkbox.setObjectName("completion_checkbox")
-        completion_checkbox.stateChanged.connect(lambda state, a=appointment: self.confirm_completion(state, a))
-        layout.addWidget(completion_checkbox)
+        layout.addWidget(date_label)
+        layout.addWidget(time_label)
 
         card.setLayout(layout)
         self.verticalLayout.addWidget(card)
-
-    def confirm_completion(self, state, appointment):
-        msg_box = QMessageBox()
-        msg_box.setWindowTitle("Confirm Completion")
-        msg_box.setText(f"Are you sure you want to mark {appointment['name']}'s appointment as completed?")
-        msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-        msg_box.setDefaultButton(QMessageBox.StandardButton.No)
-        msg_box.setIcon(QMessageBox.Icon.Question)
-        font = QFont()
-        font.setPointSize(10)
-        msg_box.setFont(font)
-        msg_box.setGeometry(QtCore.QRect(100, 100, 400, 200))
-        reply = msg_box.exec()
-
-        if reply == QMessageBox.StandardButton.Yes:
-            print(f"Appointment for {appointment['name']} marked as completed.")
-        else:
-            self.sender().setChecked(False)
 
     def create_connection(self):
         connection = None
@@ -387,10 +373,8 @@ class AddPrescriptionDialog(QDialog):
 
         self.time_label = QLabel("Time:")
         layout.addWidget(self.time_label)
-        print("Adding CustomTimeEdit...")
         self.time_input = CustomTimeEdit()
         layout.addWidget(self.time_input)
-        print("CustomTimeEdit added.")
 
         self.description_label = QLabel("Description:")
         layout.addWidget(self.description_label)
@@ -414,8 +398,6 @@ class AddPrescriptionDialog(QDialog):
 
         layout.addLayout(button_layout)
         self.setLayout(layout)
-
-        
 
     def save_prescription(self):
         clinic_name = self.clinic_name_input.text()
@@ -447,17 +429,19 @@ class AddPrescriptionDialog(QDialog):
                     return
 
                 cursor.execute("""
-                    INSERT INTO Records (Clinic_ID, Patient_ID, Doctor_ID, Date, Time, Description, Prescription)
+                    INSERT INTO Records (Clinic_ID, Patient_ID, Patient_Name, Doctor_ID, Doctor_Name, Date, Time, Description, Prescription)
                     VALUES (
                         ?,
                         (SELECT Patient_ID FROM Patient WHERE Patient_Name = ?),
                         ?,
                         ?,
+                        (SELECT Doctor_Name FROM Doctor WHERE Doctor_ID = ?),
+                        ?,
                         ?,
                         ?,
                         ?
                     )
-                """, (clinic_id, patient_name, doctor_id, date, time, description, prescription))
+                """, (clinic_id, patient_name, patient_name, doctor_id, doctor_id,date, time, description, prescription))
                 connection.commit()
                 QMessageBox.information(self, "Prescription Added", "Prescription added successfully.")
                 self.accept()
@@ -497,10 +481,12 @@ class CustomTimeEdit(QTimeEdit):
         print("CustomTimeEdit initialized successfully.")
 
 
-
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
-    doctor_id = 1  # Replace this with the actual doctor ID obtained from login
+    if len(sys.argv) > 1:
+        doctor_id = int(sys.argv[1])  # Read doctor_id from command line arguments
+    else:
+        doctor_id = 1  # Fallback to a default value if not provided
     Form = QtWidgets.QWidget()
     ui = Ui_Form(doctor_id)
     ui.setupUi(Form)

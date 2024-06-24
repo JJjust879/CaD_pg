@@ -2,7 +2,7 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 import subprocess
 import sqlite3
 import startupwindow
-
+import sys
 
 class Ui_DoctorLogin(object):
     def setupUi(self, DoctorLogin):

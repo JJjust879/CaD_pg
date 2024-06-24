@@ -5,6 +5,7 @@ from PyQt5.QtGui import QPixmap, QIcon, QRegExpValidator
 from base_screen import BaseScreen, CustomListItem
 from view_dialog import ViewDialog
 import sqlite3
+
 class PhoneEdit(QLineEdit):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -45,7 +46,6 @@ class DoctorViewDialog(ViewDialog):
         except Exception as e:
             QMessageBox.critical(self, "Error", f"An unexpected error occurred: {e}")
             self.close()
-
 
 
 class DoctorDetailDialog(QDialog):
@@ -140,6 +140,17 @@ class DoctorDetailDialog(QDialog):
             conn = sqlite3.connect('CallADoctor.db')
             cursor = conn.cursor()
 
+            # Check for existing doctor with the same name, email, or phone
+            cursor.execute("""
+                SELECT Doctor_ID FROM Doctor 
+                WHERE (Doctor_Name = ? OR Doctor_Email = ? OR Doctor_Phone = ?) 
+                AND Doctor_ID != ?
+            """, (self.name.text(), self.email.text(), self.phone.text(), self.doctor_id or -1))
+            existing_doctor = cursor.fetchone()
+            if existing_doctor:
+                QMessageBox.warning(self, "Duplicate Entry", "A doctor with the same name, email, or phone number already exists.")
+                return
+
             portrait_data = None
             if self.portrait_path:
                 with open(self.portrait_path, 'rb') as file:
@@ -169,8 +180,6 @@ class DoctorDetailDialog(QDialog):
             QMessageBox.critical(self, "Database Error", f"An error occurred while saving the doctor: {e}")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"An unexpected error occurred: {e}")
-
-
 
 
 class DoctorsScreen(BaseScreen):
@@ -291,4 +300,3 @@ class DoctorsScreen(BaseScreen):
 
     def update_sort_indicator(self, index):
         pass
-

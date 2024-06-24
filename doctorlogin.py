@@ -1,7 +1,7 @@
 from PyQt6 import QtCore, QtGui, QtWidgets
-import startupwindow
-import Doctor
+import subprocess
 import sqlite3
+import startupwindow
 
 
 class Ui_DoctorLogin(object):
@@ -59,7 +59,7 @@ class Ui_DoctorLogin(object):
         font.setPointSize(14)
         self.lineEdit_2.setFont(font)
         self.lineEdit_2.setObjectName("lineEdit_2")
-        self.lineEdit_2.setEchoMode(QtWidgets.QLineEdit.EchoMode.Password)  # Set initial EchoMode to Password
+        self.lineEdit_2.setEchoMode(QtWidgets.QLineEdit.EchoMode.Password)
         self.gridLayout_2.addWidget(self.lineEdit_2, 3, 1, 1, 1)
 
         self.Password = QtWidgets.QLabel(parent=self.horizontalLayoutWidget)
@@ -120,14 +120,11 @@ class Ui_DoctorLogin(object):
         self.retranslateUi(DoctorLogin)
         QtCore.QMetaObject.connectSlotsByName(DoctorLogin)
 
-        # Connect checkbox state change to toggle_password_visibility method
         self.checkBox.stateChanged.connect(self.toggle_password_visibility)
-
-        # Connect the Back button to the openStartupWindow method
         self.Back.clicked.connect(self.openStartupWindow)
-        self.Login.clicked.connect(self.login)  # Connect the Login button to the login method
+        self.Login.clicked.connect(self.login)
 
-        self.current_window = DoctorLogin  # Set the current window attribute
+        self.current_window = DoctorLogin
 
     def retranslateUi(self, DoctorLogin):
         _translate = QtCore.QCoreApplication.translate
@@ -154,29 +151,25 @@ class Ui_DoctorLogin(object):
         username = self.lineEdit.text()
         password = self.lineEdit_2.text()
 
-        # Connect to the database
         conn = sqlite3.connect('CallADoctor.db')
         cursor = conn.cursor()
-
-        # Check if the username and password are correct
-        cursor.execute("SELECT * FROM Doctor WHERE Doctor_Name=? AND Doctor_ID=?", (username, password))
+        cursor.execute("SELECT * FROM Doctor WHERE Doctor_Name=?", (username,))
         result = cursor.fetchone()
-
         if result:
-            QtWidgets.QMessageBox.information(self.current_window, "Login Successful", "You have successfully logged in.")
-            # Proceed to the Doctor's dashboard or main window
-            self.openDoctorDashboard()
+            doctor_id = result[0]  # Assuming the doctor ID is retrieved by the column name
+            phone_number = result[7]  
+            if phone_number[-4:] == password:
+                QtWidgets.QMessageBox.information(self.current_window, "Login Successful", "You have successfully logged in.")
+                self.openDoctorDashboard(doctor_id)
+            else:
+                QtWidgets.QMessageBox.warning(self.current_window, "Login Failed", "Invalid username or password.")
         else:
             QtWidgets.QMessageBox.warning(self.current_window, "Login Failed", "Invalid username or password.")
-
-        # Close the database connection
+        
         conn.close()
 
-    def openDoctorDashboard(self):
-        self.new_window = QtWidgets.QWidget()
-        self.ui = Doctor.Ui_Form()
-        self.ui.setupUi(self.new_window)
-        self.new_window.show()
+    def openDoctorDashboard(self, doctor_id):
+        subprocess.Popen([sys.executable, 'Doctor.py', str(doctor_id)])
         self.current_window.close()
 
 
